@@ -38,7 +38,7 @@ export default function AcessoPage() {
   return (
     <section className="panel mx-auto max-w-md p-6 md:p-8">
       <div className="kicker">Casa</div>
-      <h1 className="mt-2 font-serif text-4xl">Entrar</h1>
+      <h1 className="mt-2 font-serif text-4xl">Administração</h1>
       <p className="mt-3 text-sm text-muted">A senha abre só o que é da sua função.</p>
       {staff.name && staff.role ? (
         <div className="mt-6 space-y-3">
