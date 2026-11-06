@@ -8,6 +8,7 @@ export const restaurant = {
   marketplaceRate: 0.23,
   deliveryFee: 7.9,
   freeDeliveryFrom: 90,
+  staffPin: "2211",
 };
 
 export const payLabel: Record<string, string> = {

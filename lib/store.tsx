@@ -95,7 +95,7 @@ function promote(order: Order): Order {
 interface Store extends AppState {
   ready: boolean;
   reset: () => void;
-  saveIngredient: (ingredient: Ingredient) => void;
+  saveIngredient: (ingredient: Ingredient, supplierName?: string) => void;
   saveDish: (dish: Dish) => void;
   receivePurchase: (input: { supplierId: string; invoice: string; items: PurchaseItem[] }) => void;
   openTable: (tableId: string) => string;
@@ -131,27 +131,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancel = false;
+    const local = load();
+    const baseline = JSON.stringify(local);
+    lastSent.current = baseline;
+    setState(local);
+    setReady(true);
+    if (!houseOnline) return;
     (async () => {
-      if (houseOnline) {
-        const remote = await fetchHouse();
-        if (cancel) return;
-        if (remote) {
-          const next = adoptHouse(remote);
-          lastSent.current = JSON.stringify(remote);
-          setState(next);
-        } else {
-          const seed = seedState();
-          lastSent.current = JSON.stringify(seed);
-          await saveHouse(seed);
-          if (cancel) return;
-          setState(seed);
-        }
-      } else {
-        const local = load();
-        lastSent.current = JSON.stringify(local);
-        setState(local);
-      }
-      if (!cancel) setReady(true);
+      const remote = await fetchHouse();
+      if (cancel || !remote || lastSent.current !== baseline) return;
+      const next = adoptHouse(remote);
+      lastSent.current = JSON.stringify(remote);
+      setState(next);
     })();
     return () => {
       cancel = true;
@@ -276,13 +267,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       customers: state.customers ?? [],
       ready,
       reset: () => setState(seedState()),
-      saveIngredient: (ingredient) =>
-        setState((current) => ({
-          ...current,
-          ingredients: current.ingredients.some((item) => item.id === ingredient.id)
-            ? current.ingredients.map((item) => (item.id === ingredient.id ? ingredient : item))
-            : [ingredient, ...current.ingredients],
-        })),
+      saveIngredient: (ingredient, supplierName) =>
+        setState((current) => {
+          let suppliers = current.suppliers;
+          let supplierId = ingredient.supplierId;
+          const name = supplierName?.trim();
+          if (name) {
+            const found = suppliers.find((item) => item.name.toLowerCase() === name.toLowerCase());
+            if (found) supplierId = found.id;
+            else {
+              supplierId = uid("sup");
+              suppliers = [{ id: supplierId, name, phone: "", category: ingredient.category }, ...suppliers];
+            }
+          }
+          const next = { ...ingredient, supplierId };
+          return {
+            ...current,
+            suppliers,
+            ingredients: current.ingredients.some((item) => item.id === next.id)
+              ? current.ingredients.map((item) => (item.id === next.id ? next : item))
+              : [next, ...current.ingredients],
+          };
+        }),
       saveDish: (dish) =>
         setState((current) => ({
           ...current,

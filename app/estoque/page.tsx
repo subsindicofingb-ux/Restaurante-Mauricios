@@ -9,20 +9,39 @@ import type { Ingredient, Unit } from "@/lib/types";
 
 const units: Unit[] = ["kg", "g", "L", "ml", "un"];
 
+function blankIngredient(supplierId: string): Ingredient {
+  return {
+    id: uid("ing"),
+    name: "",
+    unit: "kg",
+    category: "",
+    stock: 0,
+    minStock: 0,
+    avgCost: 0,
+    supplierId,
+  };
+}
+
 export default function EstoquePage() {
   const store = useStore();
   const [category, setCategory] = useState("Todos");
-  const categories = ["Todos", ...new Set(store.ingredients.map((item) => item.category))];
+  const categories = ["Todos", ...new Set(store.ingredients.map((item) => item.category).filter(Boolean))];
   const [draft, setDraft] = useState<Ingredient | null>(null);
+  const [supplierName, setSupplierName] = useState("");
 
   const list = store.ingredients.filter((item) => category === "Todos" || item.category === category);
+
+  function openIngredient(ingredient: Ingredient) {
+    setDraft({ ...ingredient });
+    setSupplierName(store.suppliers.find((item) => item.id === ingredient.supplierId)?.name ?? "");
+  }
 
   return (
     <div>
       <PageIntro
         kicker="Posição"
         title="Estoque vivo"
-        text="A saída acontece quando a cozinha recebe o pedido, pela quantidade da ficha. A entrada, com custo médio, acontece na compra."
+        text="Cada insumo tem nome, unidade e valor. Corrija o cadastro quando o preço ou a quantidade mudarem. A ficha usa esse valor no CMV."
       />
       <div className="mb-4 flex flex-wrap gap-2">
         {categories.map((item) => (
@@ -36,18 +55,10 @@ export default function EstoquePage() {
         ))}
         <button
           className="btn btn-primary"
-          onClick={() =>
-            setDraft({
-              id: uid("ing"),
-              name: "",
-              unit: "kg",
-              category: "Mercearia",
-              stock: 0,
-              minStock: 0,
-              avgCost: 0,
-              supplierId: store.suppliers[0]?.id ?? "",
-            })
-          }
+          onClick={() => {
+            setDraft(blankIngredient(store.suppliers[0]?.id ?? ""));
+            setSupplierName("");
+          }}
         >
           Novo insumo
         </button>
@@ -55,32 +66,90 @@ export default function EstoquePage() {
 
       {draft && (
         <form
-          className="panel mb-4 grid gap-3 p-4 md:grid-cols-4"
+          className="panel mb-4 p-4"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!draft.name) return;
-            store.saveIngredient(draft);
+            if (!draft.name.trim()) return;
+            store.saveIngredient({ ...draft, name: draft.name.trim(), category: draft.category.trim() || "Geral" }, supplierName);
             setDraft(null);
+            setSupplierName("");
           }}
         >
-          <input className="field" placeholder="Nome" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          <input className="field" placeholder="Categoria" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} />
-          <select className="field" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value as Unit })}>
-            {units.map((unit) => (
-              <option key={unit}>{unit}</option>
-            ))}
-          </select>
-          <input className="field" type="number" step="0.01" placeholder="Custo médio" value={draft.avgCost} onChange={(e) => setDraft({ ...draft, avgCost: Number(e.target.value) })} />
-          <input className="field" type="number" step="0.01" placeholder="Estoque" value={draft.stock} onChange={(e) => setDraft({ ...draft, stock: Number(e.target.value) })} />
-          <input className="field" type="number" step="0.01" placeholder="Mínimo" value={draft.minStock} onChange={(e) => setDraft({ ...draft, minStock: Number(e.target.value) })} />
-          <select className="field" value={draft.supplierId} onChange={(e) => setDraft({ ...draft, supplierId: e.target.value })}>
-            {store.suppliers.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.name}
-              </option>
-            ))}
-          </select>
-          <button className="btn btn-primary">Salvar insumo</button>
+          <div className="mb-3 font-serif text-2xl">{store.ingredients.some((item) => item.id === draft.id) ? "Corrigir insumo" : "Novo insumo"}</div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="text-sm md:col-span-2">
+              Nome
+              <input className="field mt-1" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            </label>
+            <label className="text-sm">
+              Categoria
+              <input className="field mt-1" value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} placeholder="Carnes, hortifruti…" />
+            </label>
+            <label className="text-sm">
+              Unidade
+              <select className="field mt-1" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value as Unit })}>
+                {units.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unit}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              Valor (R$ por unidade)
+              <input
+                className="field mt-1"
+                type="number"
+                min={0}
+                step="0.01"
+                value={draft.avgCost}
+                onChange={(e) => setDraft({ ...draft, avgCost: Number(e.target.value) })}
+              />
+            </label>
+            <label className="text-sm">
+              Estoque atual
+              <input
+                className="field mt-1"
+                type="number"
+                step="0.01"
+                value={draft.stock}
+                onChange={(e) => setDraft({ ...draft, stock: Number(e.target.value) })}
+              />
+            </label>
+            <label className="text-sm">
+              Estoque mínimo
+              <input
+                className="field mt-1"
+                type="number"
+                min={0}
+                step="0.01"
+                value={draft.minStock}
+                onChange={(e) => setDraft({ ...draft, minStock: Number(e.target.value) })}
+              />
+            </label>
+            <label className="text-sm">
+              Fornecedor
+              <input className="field mt-1" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} list="fornecedores" />
+              <datalist id="fornecedores">
+                {store.suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.name} />
+                ))}
+              </datalist>
+            </label>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button className="btn btn-primary">Salvar insumo</button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                setDraft(null);
+                setSupplierName("");
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
         </form>
       )}
 
@@ -91,19 +160,31 @@ export default function EstoquePage() {
               <th className="px-4 py-3 font-medium">Insumo</th>
               <th className="px-4 py-3 font-medium">Posição</th>
               <th className="px-4 py-3 font-medium">Hoje</th>
-              <th className="px-4 py-3 font-medium">Custo médio</th>
+              <th className="px-4 py-3 font-medium">Valor</th>
+              <th className="px-4 py-3 font-medium" />
             </tr>
           </thead>
           <tbody>
+            {list.length === 0 && (
+              <tr>
+                <td className="px-4 py-6 text-muted" colSpan={5}>
+                  Nenhum insumo nesta lista. Cadastre o nome, a unidade e o valor.
+                </td>
+              </tr>
+            )}
             {list.map((item) => {
               const used = consumptionToday(store, item.id);
               const low = item.stock < item.minStock;
               const width = Math.max(6, Math.min(100, (item.stock / Math.max(item.minStock * 2, item.stock, 1)) * 100));
+              const supplier = store.suppliers.find((entry) => entry.id === item.supplierId);
               return (
                 <tr key={item.id} className="border-t border-line">
                   <td className="px-4 py-3">
                     <div className="font-medium">{item.name}</div>
-                    <div className="text-xs text-muted">{item.category}</div>
+                    <div className="text-xs text-muted">
+                      {item.category}
+                      {supplier ? ` · ${supplier.name}` : ""}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className={low ? "font-medium text-terra" : ""}>{qty(item.stock, item.unit)}</div>
@@ -112,7 +193,15 @@ export default function EstoquePage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-muted">{used ? qty(used, item.unit) : "—"}</td>
-                  <td className="px-4 py-3">{money(item.avgCost)}</td>
+                  <td className="px-4 py-3">
+                    {money(item.avgCost)}
+                    <span className="text-xs text-muted"> / {item.unit}</span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button className="btn btn-ghost" onClick={() => openIngredient(item)}>
+                      Corrigir
+                    </button>
+                  </td>
                 </tr>
               );
             })}

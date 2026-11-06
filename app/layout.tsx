@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Fraunces, Outfit } from "next/font/google";
 import { Shell } from "@/components/shell";
+import { StaffProvider } from "@/lib/staff";
 import { StoreProvider } from "@/lib/store";
 import "./globals.css";
 
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="pt-BR">
       <body className={`${sans.variable} ${serif.variable} font-sans text-ink antialiased`}>
         <StoreProvider>
-          <Shell>{children}</Shell>
+          <StaffProvider>
+            <Shell>{children}</Shell>
+          </StaffProvider>
         </StoreProvider>
       </body>
     </html>

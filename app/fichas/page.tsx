@@ -208,43 +208,70 @@ export default function FichasPage() {
               </button>
             </div>
             <div className="space-y-2">
+              {store.ingredients.length === 0 && (
+                <p className="rounded-2xl bg-paper px-3 py-3 text-sm text-muted">Cadastre o insumo no estoque, com unidade e valor, antes de colocar na ficha.</p>
+              )}
               {current.lines.map((line, index) => {
                 const ingredient = store.ingredients.find((item) => item.id === line.ingredientId);
                 const lineValue = ingredient ? line.qty * (1 + line.wastePct / 100) * ingredient.avgCost : 0;
                 return (
-                  <div key={`${line.ingredientId}-${index}`} className="grid gap-2 rounded-2xl border border-line p-3 md:grid-cols-[1.4fr_0.6fr_0.6fr_auto]">
-                    <select
-                      className="field"
-                      value={line.ingredientId}
-                      onChange={(e) => updateLine(index, { ingredientId: e.target.value })}
-                    >
-                      {store.ingredients.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name} ({money(item.avgCost)}/{item.unit})
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="field"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={line.qty}
-                      onChange={(e) => updateLine(index, { qty: Number(e.target.value) })}
-                    />
-                    <input
-                      className="field"
-                      type="number"
-                      min={0}
-                      step="1"
-                      value={line.wastePct}
-                      onChange={(e) => updateLine(index, { wastePct: Number(e.target.value) })}
-                      title="Perda %"
-                    />
-                    <div className="flex items-center justify-between gap-3 text-sm">
+                  <div key={`${line.ingredientId}-${index}`} className="grid gap-2 rounded-2xl border border-line p-3 md:grid-cols-[1.4fr_0.7fr_0.7fr_0.8fr_auto]">
+                    <label className="text-xs text-muted">
+                      Insumo
+                      <select
+                        className="field mt-1"
+                        value={line.ingredientId}
+                        onChange={(e) => updateLine(index, { ingredientId: e.target.value })}
+                      >
+                        <option value="">Escolher</option>
+                        {store.ingredients.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs text-muted">
+                      Quantidade {ingredient ? `(${ingredient.unit})` : ""}
+                      <input
+                        className="field mt-1"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={line.qty}
+                        onChange={(e) => updateLine(index, { qty: Number(e.target.value) })}
+                      />
+                    </label>
+                    <label className="text-xs text-muted">
+                      Perda %
+                      <input
+                        className="field mt-1"
+                        type="number"
+                        min={0}
+                        step="1"
+                        value={line.wastePct}
+                        onChange={(e) => updateLine(index, { wastePct: Number(e.target.value) })}
+                      />
+                    </label>
+                    <label className="text-xs text-muted">
+                      Valor (R$ / {ingredient?.unit ?? "un"})
+                      <input
+                        className="field mt-1"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={ingredient?.avgCost ?? 0}
+                        disabled={!ingredient}
+                        onChange={(e) => {
+                          if (!ingredient) return;
+                          store.saveIngredient({ ...ingredient, avgCost: Number(e.target.value) });
+                        }}
+                      />
+                    </label>
+                    <div className="flex items-end justify-between gap-3 pb-2 text-sm">
                       <span>
+                        <span className="block text-xs text-muted">Custo na porção</span>
                         {money(lineValue / (current.portions || 1))}
-                        <span className="ml-1 text-xs text-muted">{ingredient?.unit}</span>
                       </span>
                       <button
                         className="text-terra"
@@ -257,7 +284,7 @@ export default function FichasPage() {
                 );
               })}
             </div>
-            <p className="mt-2 text-xs text-muted">Quantidade da receita inteira. A terceira coluna é a perda, em %. O custo mostrado já é por porção.</p>
+            <p className="mt-2 text-xs text-muted">A quantidade é da receita inteira. O valor é o preço do insumo e vale também no estoque. O custo da porção já desconta o rendimento.</p>
           </div>
 
           <div className="mt-5 flex gap-2">

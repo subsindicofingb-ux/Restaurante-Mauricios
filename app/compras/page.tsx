@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageIntro } from "@/components/bits";
 import { clock, money, uid } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -14,6 +14,16 @@ export default function ComprasPage() {
     { ingredientId: store.ingredients[0]?.id ?? "", qty: 1, unitCost: store.ingredients[0]?.avgCost ?? 0 },
   ]);
   const [done, setDone] = useState("");
+
+  useEffect(() => {
+    const first = store.ingredients[0];
+    if (first) {
+      setRows((current) =>
+        current.map((row) => (row.ingredientId ? row : { ...row, ingredientId: first.id, unitCost: first.avgCost })),
+      );
+    }
+    if (store.suppliers[0]) setSupplierId((id) => id || store.suppliers[0].id);
+  }, [store.ingredients, store.suppliers]);
 
   const total = rows.reduce((sum, row) => sum + row.qty * row.unitCost, 0);
 
@@ -36,7 +46,7 @@ export default function ComprasPage() {
         }}
       >
         <div className="grid gap-3 md:grid-cols-[1.4fr_0.8fr]">
-          <label className="text-sm">
+          <label className="block text-sm font-medium text-ink">
             Fornecedor
             <select className="field mt-1" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
               {store.suppliers.map((supplier) => (
@@ -46,44 +56,54 @@ export default function ComprasPage() {
               ))}
             </select>
           </label>
-          <label className="text-sm">
+          <label className="block text-sm font-medium text-ink">
             Nota ou recibo
             <input className="field mt-1" value={invoice} onChange={(e) => setInvoice(e.target.value)} placeholder="NF 19020" />
           </label>
         </div>
         <div className="mt-4 space-y-2">
           {rows.map((row, index) => (
-            <div key={index} className="grid gap-2 md:grid-cols-[1.5fr_0.6fr_0.6fr]">
-              <select
-                className="field"
-                value={row.ingredientId}
-                onChange={(e) => {
-                  const ingredient = store.ingredients.find((item) => item.id === e.target.value);
-                  setRows(rows.map((item, i) => (i === index ? { ...item, ingredientId: e.target.value, unitCost: ingredient?.avgCost ?? item.unitCost } : item)));
-                }}
-              >
-                {store.ingredients.map((ingredient) => (
-                  <option key={ingredient.id} value={ingredient.id}>
-                    {ingredient.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="field"
-                type="number"
-                min={0}
-                step="0.01"
-                value={row.qty}
-                onChange={(e) => setRows(rows.map((item, i) => (i === index ? { ...item, qty: Number(e.target.value) } : item)))}
-              />
-              <input
-                className="field"
-                type="number"
-                min={0}
-                step="0.01"
-                value={row.unitCost}
-                onChange={(e) => setRows(rows.map((item, i) => (i === index ? { ...item, unitCost: Number(e.target.value) } : item)))}
-              />
+            <div key={index} className="grid gap-2 md:grid-cols-[1.5fr_0.7fr_0.8fr]">
+              <label className="block text-sm font-medium text-ink">
+                Insumo
+                <select
+                  className="field mt-1"
+                  value={row.ingredientId}
+                  onChange={(e) => {
+                    const ingredient = store.ingredients.find((item) => item.id === e.target.value);
+                    setRows(rows.map((item, i) => (i === index ? { ...item, ingredientId: e.target.value, unitCost: ingredient?.avgCost ?? item.unitCost } : item)));
+                  }}
+                >
+                  <option value="">Escolher</option>
+                  {store.ingredients.map((ingredient) => (
+                    <option key={ingredient.id} value={ingredient.id}>
+                      {ingredient.name} ({ingredient.unit})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-ink">
+                Quantidade
+                <input
+                  className="field mt-1"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={row.qty}
+                  onChange={(e) => setRows(rows.map((item, i) => (i === index ? { ...item, qty: Number(e.target.value) } : item)))}
+                />
+              </label>
+              <label className="block text-sm font-medium text-ink">
+                Valor (R$ por unidade)
+                <input
+                  className="field mt-1"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={row.unitCost}
+                  onChange={(e) => setRows(rows.map((item, i) => (i === index ? { ...item, unitCost: Number(e.target.value) } : item)))}
+                />
+              </label>
             </div>
           ))}
         </div>

@@ -1,8 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bike,
   ChefHat,
@@ -16,13 +16,14 @@ import {
 } from "lucide-react";
 import { restaurant } from "@/lib/config";
 import { useClientSession } from "@/lib/session";
+import { staffSignedIn, useStaffSession } from "@/lib/staff";
 import { useStore } from "@/lib/store";
 
 const groups = [
   {
     label: "Gestão",
     items: [
-      { href: "/", label: "Painel", icon: LayoutDashboard },
+      { href: "/painel", label: "Painel", icon: LayoutDashboard },
       { href: "/fichas", label: "Fichas técnicas", icon: ClipboardList },
       { href: "/estoque", label: "Estoque", icon: Warehouse },
       { href: "/compras", label: "Compras", icon: ShoppingBasket },
@@ -41,29 +42,44 @@ const groups = [
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const store = useStore();
   const session = useClientSession();
-  const guest = pathname.startsWith("/pedir") || pathname.startsWith("/pedido");
+  const staff = useStaffSession();
+  const guest = pathname === "/" || pathname.startsWith("/pedir") || pathname.startsWith("/pedido");
   const account = store.customers.find((item) => item.id === session.id);
   const waiting = store.orders.filter((order) => order.status === "recebido").length;
   const kds = pathname === "/cozinha";
+
+  useEffect(() => {
+    if (guest || staff.name || staffSignedIn()) return;
+    if (!staff.ready) return;
+    router.replace("/");
+  }, [staff.ready, staff.name, guest, router]);
 
   if (guest) {
     return (
       <div className="min-h-screen">
         <header className="flex items-center justify-between gap-4 px-5 py-4 md:px-10">
-          <Link href="/pedir" className="flex items-center gap-3">
+          <Link href={pathname === "/" ? "/" : "/pedir"} className="flex items-center gap-3">
             <img src="/logo.png" alt="" className="h-14 w-14 rounded-full bg-white shadow-card" />
             <span>
               <span className="block font-serif text-xl leading-none">{restaurant.name}</span>
               <span className="text-xs text-muted">{restaurant.tagline}</span>
             </span>
           </Link>
-          {account && (
-            <button onClick={session.leave} className="text-sm text-muted underline-offset-4 hover:underline">
-              Sair · {account.name.split(" ")[0]}
-            </button>
-          )}
+          <div className="flex items-center gap-4">
+            {staff.name && pathname.startsWith("/pedir") && (
+              <Link href="/painel" className="text-sm text-muted underline-offset-4 hover:underline">
+                Equipe
+              </Link>
+            )}
+            {account && pathname.startsWith("/pedir") && (
+              <button onClick={session.leave} className="text-sm text-muted underline-offset-4 hover:underline">
+                Sair · {account.name.split(" ")[0]}
+              </button>
+            )}
+          </div>
         </header>
         <main className="mx-auto max-w-6xl px-5 pb-28 md:px-10">{children}</main>
       </div>
@@ -113,10 +129,26 @@ export function Shell({ children }: { children: ReactNode }) {
             Cardápio do cliente
           </Link>
         </nav>
-        <button onClick={store.reset} className="m-4 rounded-2xl px-3 py-2 text-left text-xs text-[#b7ab9c] hover:bg-white/5">
-          Restaurar dados de demonstração
-        </button>
+        <div className="m-4 space-y-1">
+          <div className="px-3 text-xs text-[#b7ab9c]">{staff.name}</div>
+          <button
+            onClick={() => {
+              staff.leave();
+              router.push("/");
+            }}
+            className="w-full rounded-2xl px-3 py-2 text-left text-xs text-[#b7ab9c] hover:bg-white/5"
+          >
+            Sair da equipe
+          </button>
+          <button onClick={store.reset} className="w-full rounded-2xl px-3 py-2 text-left text-xs text-[#b7ab9c] hover:bg-white/5">
+            Restaurar dados de demonstração
+          </button>
+        </div>
       </aside>
+      {(!staff.ready || !staff.name) && (
+        <div className="grid min-h-screen place-items-center text-sm text-muted">Abrindo a equipe…</div>
+      )}
+      {staff.name && (
       <div className="min-w-0">
         <div className="flex gap-2 overflow-x-auto border-b border-line bg-side px-3 py-3 text-[#f3ecdf] md:hidden">
           {groups.flatMap((group) => group.items).map((item) => (
@@ -136,6 +168,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">{children}</div>
         </main>
       </div>
+      )}
     </div>
   );
 }

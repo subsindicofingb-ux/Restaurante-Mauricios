@@ -1,10 +1,19 @@
 import { houseMenu } from "./menu";
+import { houseIngredients, houseSuppliers } from "./pantry";
 import type { AppState } from "./types";
 
-export function seedState(): AppState {
+function copyPantry() {
   return {
-    suppliers: [],
-    ingredients: [],
+    suppliers: houseSuppliers.map((item) => ({ ...item })),
+    ingredients: houseIngredients.map((item) => ({ ...item })),
+  };
+}
+
+export function seedState(): AppState {
+  const pantry = copyPantry();
+  return {
+    suppliers: pantry.suppliers,
+    ingredients: pantry.ingredients,
     dishes: houseMenu.map((dish) => ({ ...dish, lines: dish.lines.map((line) => ({ ...line })) })),
     purchases: [],
     tables: [
@@ -25,6 +34,12 @@ export function seedState(): AppState {
 export function adoptHouse(state: AppState): AppState {
   const customers = Array.isArray(state.customers) ? state.customers : [];
   const demo = state.dishes.some((dish) => dish.id === "dish_picanha" || dish.name === "Picanha na brasa");
-  if (demo) return seedState();
-  return { ...state, customers };
+  const base = demo ? seedState() : { ...state, customers };
+  if (base.ingredients.length > 0) return base;
+  const pantry = copyPantry();
+  return {
+    ...base,
+    suppliers: base.suppliers.length ? base.suppliers : pantry.suppliers,
+    ingredients: pantry.ingredients,
+  };
 }
