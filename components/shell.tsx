@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -56,6 +56,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const account = store.customers.find((item) => item.id === session.id);
   const kds = pathname === "/cozinha";
   const groups = staff.role === "admin" ? [adminGroup, floorGroup] : [floorGroup];
+  const logoHeld = useRef(false);
+  const customerHome = pathname.startsWith("/pedir") || pathname.startsWith("/pedido") ? "/pedir" : "/";
 
   useEffect(() => {
     if (!staff.ready || customer) return;
@@ -73,13 +75,36 @@ export function Shell({ children }: { children: ReactNode }) {
     return (
       <div className="min-h-screen">
         <header className="flex items-center justify-between gap-4 px-5 py-4 md:px-10">
-          <Link href={pathname.startsWith("/pedir") || pathname.startsWith("/pedido") ? "/pedir" : "/"} className="flex items-center gap-3">
+          <button
+            type="button"
+            className="flex items-center gap-3 text-left"
+            aria-label={restaurant.name}
+            onContextMenu={(event) => event.preventDefault()}
+            onPointerDown={() => {
+              if (gate) return;
+              logoHeld.current = false;
+              const timer = window.setTimeout(() => {
+                logoHeld.current = true;
+                router.push("/acesso");
+              }, 700);
+              const stop = () => window.clearTimeout(timer);
+              window.addEventListener("pointerup", stop, { once: true });
+              window.addEventListener("pointercancel", stop, { once: true });
+            }}
+            onClick={() => {
+              if (logoHeld.current) {
+                logoHeld.current = false;
+                return;
+              }
+              router.push(gate ? "/" : customerHome);
+            }}
+          >
             <img src="/logo.png" alt="" className="h-14 w-14 rounded-full bg-white shadow-card" />
             <span>
               <span className="block font-serif text-xl leading-none">{restaurant.name}</span>
               <span className="text-xs text-muted">{restaurant.tagline}</span>
             </span>
-          </Link>
+          </button>
           {account && pathname.startsWith("/pedir") && (
             <button onClick={session.leave} className="text-sm text-muted underline-offset-4 hover:underline">
               Sair · {account.name.split(" ")[0]}
