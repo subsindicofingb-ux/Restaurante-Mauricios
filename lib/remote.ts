@@ -43,6 +43,7 @@ function customerRow(customer: Customer) {
     neighborhood: customer.neighborhood ?? "",
     city: customer.city ?? "",
     address: customer.address ?? "",
+    password_hash: customer.passwordHash ?? "",
     created_at: customer.createdAt,
   };
 }

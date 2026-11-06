@@ -45,6 +45,7 @@ function customerOf(item: Customer): Customer {
     neighborhood: item.neighborhood ?? "",
     city: item.city ?? "",
     address: item.address ?? "",
+    passwordHash: item.passwordHash ?? "",
   };
 }
 

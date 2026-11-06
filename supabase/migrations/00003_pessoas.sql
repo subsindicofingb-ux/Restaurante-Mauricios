@@ -12,6 +12,7 @@ create table if not exists public.customers (
   neighborhood text not null default '',
   city text not null default '',
   address text not null default '',
+  password_hash text not null default '',
   created_at timestamptz not null default now()
 );
 
@@ -34,6 +35,8 @@ create index if not exists customers_street_idx on public.customers (street);
 create index if not exists customers_neighborhood_idx on public.customers (neighborhood);
 create index if not exists customers_city_idx on public.customers (city);
 create index if not exists customers_phone_idx on public.customers (phone);
+
+alter table public.customers add column if not exists password_hash text not null default '';
 create index if not exists employees_name_idx on public.employees (name);
 create index if not exists administrators_name_idx on public.administrators (name);
 

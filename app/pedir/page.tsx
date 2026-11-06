@@ -7,6 +7,7 @@ import { deliveryFeeFor } from "@/lib/calc";
 import { payLabel, restaurant } from "@/lib/config";
 import { AddressFields } from "@/components/address-fields";
 import { digits, money, phoneLabel } from "@/lib/format";
+import { hashPassword } from "@/lib/password";
 import { menuCategories } from "@/lib/menu";
 import { useClientSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
@@ -36,6 +37,8 @@ export default function PedirPage() {
   const [mode, setMode] = useState<"cadastrar" | "entrar">("cadastrar");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [destination, setDestination] = useState<DeliveryAddress>(emptyAddress());
   const [accountError, setAccountError] = useState("");
   const [category, setCategory] = useState("Todos");
@@ -80,27 +83,62 @@ export default function PedirPage() {
   }, [menu, category, query]);
   const grouped = menuCategories.filter((item) => visible.some((dish) => dish.category === item));
 
-  function saveAccount() {
+  async function saveAccount() {
     const cleanPhone = digits(phone);
-    if (mode === "entrar" && !customer) {
-      const found = store.customers.find((item) => item.phone === cleanPhone);
+    const secret = password.trim();
+    if (cleanPhone.length < 10) {
+      setAccountError("Informe um celular com DDD.");
+      return;
+    }
+    if (secret.length < 4) {
+      setAccountError("A senha precisa ter pelo menos 4 caracteres.");
+      return;
+    }
+    const found = store.customers.find((item) => item.phone === cleanPhone);
+    const hash = await hashPassword(cleanPhone, secret);
+    if (mode === "entrar") {
       if (!found) {
         setAccountError("Não achamos esse celular. Faça o cadastro para pedir.");
         setMode("cadastrar");
         return;
       }
+      if (!found.passwordHash) {
+        setAccountError("Esse cadastro ainda não tem senha. Use Cadastrar, com o mesmo nome, para criar uma.");
+        setMode("cadastrar");
+        return;
+      }
+      if (found.passwordHash !== hash) {
+        setAccountError("Senha incorreta.");
+        return;
+      }
       session.enter(found.id);
       setAccountError("");
+      setPassword("");
       setStep("cardapio");
       return;
     }
-    if (name.trim().length < 2 || cleanPhone.length < 10) {
-      setAccountError("Informe nome e um celular com DDD.");
+    if (name.trim().length < 2) {
+      setAccountError("Informe o nome.");
       return;
     }
-    const saved = store.registerCustomer({ name, phone: cleanPhone, ...destination });
+    if (secret !== confirmPassword.trim()) {
+      setAccountError("As senhas não coincidem.");
+      return;
+    }
+    if (found?.passwordHash) {
+      setAccountError("Esse celular já tem senha. Entre em Já tenho cadastro.");
+      setMode("entrar");
+      return;
+    }
+    if (found && found.name.trim().toLocaleLowerCase("pt-BR") !== name.trim().toLocaleLowerCase("pt-BR")) {
+      setAccountError("O nome não é o mesmo deste celular.");
+      return;
+    }
+    const saved = store.registerCustomer({ name, phone: cleanPhone, passwordHash: hash, ...destination });
     session.enter(saved.id);
     setAccountError("");
+    setPassword("");
+    setConfirmPassword("");
     setStep("cardapio");
   }
 
@@ -154,7 +192,7 @@ export default function PedirPage() {
           <img src="/logo.png" alt="Mauricio's" className="mx-auto h-28 w-28 rounded-full bg-white shadow-card" />
           <h1 className="mt-4 text-center font-serif text-4xl tracking-tight">Seu acesso</h1>
           <p className="mt-2 text-center text-sm leading-6 text-muted">
-            O cadastro fica na casa. Com ele você pede, escolhe como pagar e acompanha o prato saindo da cozinha.
+            O cadastro fica na casa. A senha impede que outra pessoa entre só com o seu celular.
           </p>
           <div className="mt-6 flex rounded-full bg-white p-1 text-sm shadow-card">
             {(["cadastrar", "entrar"] as const).map((item) => (
@@ -164,8 +202,12 @@ export default function PedirPage() {
             ))}
           </div>
           <div className="mt-4 space-y-2">
-            {mode === "cadastrar" && <input className="field" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />}
-            <input className="field" placeholder="Celular com DDD" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            {mode === "cadastrar" && <input className="field" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />}
+            <input className="field" placeholder="Celular com DDD" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
+            <input className="field" placeholder="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === "cadastrar" ? "new-password" : "current-password"} />
+            {mode === "cadastrar" && (
+              <input className="field" placeholder="Confirmar senha" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+            )}
             {mode === "cadastrar" && <AddressFields value={destination} onChange={setDestination} />}
             {accountError && <p className="text-sm text-terra">{accountError}</p>}
             <button className="btn btn-primary w-full" onClick={saveAccount}>

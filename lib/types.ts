@@ -127,6 +127,7 @@ export interface Customer {
   complement: string;
   neighborhood: string;
   city: string;
+  passwordHash: string;
   createdAt: string;
 }
 

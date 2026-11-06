@@ -125,7 +125,7 @@ interface Store extends AppState {
     lines: { dishId: string; qty: number; notes: string }[];
     fire: boolean;
   }) => Order;
-  registerCustomer: (input: { name: string; phone: string; address?: string } & Partial<DeliveryAddress>) => Customer;
+  registerCustomer: (input: { name: string; phone: string; address?: string; passwordHash?: string } & Partial<DeliveryAddress>) => Customer;
   registerPerson: (input: { name: string; phone?: string; role: HousePerson["role"] }) => HousePerson;
   addExpense: (input: { description: string; category: string; amount: number }) => void;
   addWithdrawal: (input: { by: string; reason: string; amount: number }) => void;
@@ -494,6 +494,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           phone,
           ...parts,
           address,
+          passwordHash: input.passwordHash || found?.passwordHash || "",
           createdAt: found?.createdAt ?? new Date().toISOString(),
         };
         setState((current) => ({
