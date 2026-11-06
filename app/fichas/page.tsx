@@ -224,7 +224,7 @@ export default function FichasPage() {
                         onChange={(e) => updateLine(index, { ingredientId: e.target.value })}
                       >
                         <option value="">Escolher</option>
-                        {store.ingredients.map((item) => (
+                        {[...store.ingredients].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")).map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.name}
                           </option>
@@ -253,8 +253,8 @@ export default function FichasPage() {
                         onChange={(e) => updateLine(index, { wastePct: Number(e.target.value) })}
                       />
                     </label>
-                    <label className="text-xs text-muted">
-                      Valor (R$ / {ingredient?.unit ?? "un"})
+                    <label className="block text-sm font-medium text-ink">
+                      Valor por unidade (R$ / {ingredient?.unit ?? "un"})
                       <input
                         className="field mt-1"
                         type="number"
@@ -284,7 +284,7 @@ export default function FichasPage() {
                 );
               })}
             </div>
-            <p className="mt-2 text-xs text-muted">A quantidade é da receita inteira. O valor é o preço do insumo e vale também no estoque. O custo da porção já desconta o rendimento.</p>
+            <p className="mt-2 text-xs text-muted">O valor por unidade fica salvo no insumo. Ao corrigir o estoque, esse número já abre preenchido.</p>
           </div>
 
           <div className="mt-5 flex gap-2">

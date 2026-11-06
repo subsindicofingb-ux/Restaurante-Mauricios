@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { deliveryFeeFor, stockNeed } from "./calc";
+import { cashDay, deliveryFeeFor, stockNeed } from "./calc";
 import { fetchHouse, houseOnline, saveHouse, supabase } from "./remote";
 import { adoptHouse, seedState } from "./seed";
 import type {
@@ -29,6 +29,9 @@ const blankState: AppState = {
   tables: [],
   orders: [],
   customers: [],
+  expenses: [],
+  withdrawals: [],
+  cashCloses: [],
 };
 
 function load(): AppState {
@@ -120,6 +123,9 @@ interface Store extends AppState {
     fire: boolean;
   }) => Order;
   registerCustomer: (input: { name: string; phone: string; address: string }) => Customer;
+  addExpense: (input: { description: string; category: string; amount: number }) => void;
+  addWithdrawal: (input: { by: string; reason: string; amount: number }) => void;
+  closeCash: (input: { by: string; countedCash: number; note: string }) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -265,6 +271,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return {
       ...state,
       customers: state.customers ?? [],
+      expenses: state.expenses ?? [],
+      withdrawals: state.withdrawals ?? [],
+      cashCloses: state.cashCloses ?? [],
       ready,
       reset: () => setState(seedState()),
       saveIngredient: (ingredient, supplierName) =>
@@ -482,6 +491,56 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }));
         return customer;
       },
+      addExpense: (input) =>
+        setState((current) => ({
+          ...current,
+          expenses: [
+            {
+              id: uid("desp"),
+              createdAt: new Date().toISOString(),
+              description: input.description.trim(),
+              category: input.category.trim() || "Outros",
+              amount: input.amount,
+            },
+            ...(current.expenses ?? []),
+          ],
+        })),
+      addWithdrawal: (input) =>
+        setState((current) => ({
+          ...current,
+          withdrawals: [
+            {
+              id: uid("ret"),
+              createdAt: new Date().toISOString(),
+              by: input.by.trim(),
+              reason: input.reason.trim(),
+              amount: input.amount,
+            },
+            ...(current.withdrawals ?? []),
+          ],
+        })),
+      closeCash: (input) =>
+        setState((current) => {
+          const day = cashDay(current);
+          return {
+            ...current,
+            cashCloses: [
+              {
+                id: uid("cx"),
+                createdAt: new Date().toISOString(),
+                by: input.by.trim(),
+                revenue: day.revenue,
+                cashSales: day.cashSales,
+                expenses: day.expenseTotal,
+                withdrawals: day.withdrawalTotal,
+                expectedCash: day.expectedCash,
+                countedCash: input.countedCash,
+                note: input.note.trim(),
+              },
+              ...(current.cashCloses ?? []),
+            ],
+          };
+        }),
       createOrder,
     };
   }, [state, ready]);

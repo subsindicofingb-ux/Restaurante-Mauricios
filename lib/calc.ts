@@ -114,6 +114,45 @@ export function stockNeed(dish: Dish, itemQty: number, ingredientId: string) {
   return (line.qty * (1 + line.wastePct / 100) * itemQty) / portions;
 }
 
+export function cashDay(state: AppState, now = new Date()) {
+  const paid = state.orders.filter((order) => order.payment === "pago" && order.status !== "cancelado" && isToday(order.updatedAt, now));
+  const selling = state.orders.filter((order) => isSale(order) && isToday(order.createdAt, now));
+  const revenue = paid.reduce((sum, order) => sum + orderTotal(order), 0);
+  const methods = (["pix", "cartao", "dinheiro"] as const).map((method) => ({
+    method,
+    total: paid.filter((order) => order.payMethod === method).reduce((sum, order) => sum + orderTotal(order), 0),
+  }));
+  const tally = new Map<string, { name: string; qty: number; total: number }>();
+  for (const order of selling) {
+    for (const item of order.items) {
+      const dish = state.dishes.find((entry) => entry.id === item.dishId);
+      const row = tally.get(item.dishId) ?? { name: dish?.name ?? "Item", qty: 0, total: 0 };
+      row.qty += item.qty;
+      row.total += item.unitPrice * item.qty;
+      tally.set(item.dishId, row);
+    }
+  }
+  const best = [...tally.values()].sort((a, b) => b.qty - a.qty || b.total - a.total)[0] ?? null;
+  const expenses = (state.expenses ?? []).filter((item) => isToday(item.createdAt, now));
+  const withdrawals = (state.withdrawals ?? []).filter((item) => isToday(item.createdAt, now));
+  const expenseTotal = expenses.reduce((sum, item) => sum + item.amount, 0);
+  const withdrawalTotal = withdrawals.reduce((sum, item) => sum + item.amount, 0);
+  const cashSales = methods.find((item) => item.method === "dinheiro")?.total ?? 0;
+  return {
+    paid,
+    revenue,
+    tickets: paid.length,
+    methods,
+    best,
+    expenses,
+    withdrawals,
+    expenseTotal,
+    withdrawalTotal,
+    cashSales,
+    expectedCash: cashSales - expenseTotal - withdrawalTotal,
+  };
+}
+
 export function deliveryFeeFor(subtotal: number, fulfillment: "entrega" | "retirada") {
   if (fulfillment === "retirada") return 0;
   if (subtotal >= restaurant.freeDeliveryFrom) return 0;

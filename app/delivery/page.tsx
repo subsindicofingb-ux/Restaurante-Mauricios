@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { PageIntro } from "@/components/bits";
 import { etaLabel, orderTotal } from "@/lib/calc";
 import { minutesAgo, money } from "@/lib/format";
@@ -91,9 +90,6 @@ export default function DeliveryPage() {
                             </button>
                           )
                         )}
-                        <Link href={`/pedido?code=${order.code}`} className="text-center text-xs underline-offset-4 hover:underline">
-                          Ver como o cliente vê
-                        </Link>
                         {order.status === "recebido" && (
                           <button className="btn btn-danger" onClick={() => store.cancelOrder(order.id)}>
                             Recusar

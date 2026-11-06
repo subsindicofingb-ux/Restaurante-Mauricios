@@ -124,6 +124,35 @@ export interface Customer {
   createdAt: string;
 }
 
+export interface CashExpense {
+  id: string;
+  createdAt: string;
+  description: string;
+  category: string;
+  amount: number;
+}
+
+export interface CashWithdrawal {
+  id: string;
+  createdAt: string;
+  by: string;
+  reason: string;
+  amount: number;
+}
+
+export interface CashClose {
+  id: string;
+  createdAt: string;
+  by: string;
+  revenue: number;
+  cashSales: number;
+  expenses: number;
+  withdrawals: number;
+  expectedCash: number;
+  countedCash: number;
+  note: string;
+}
+
 export interface AppState {
   ingredients: Ingredient[];
   suppliers: Supplier[];
@@ -132,4 +161,7 @@ export interface AppState {
   tables: DiningTable[];
   orders: Order[];
   customers: Customer[];
+  expenses: CashExpense[];
+  withdrawals: CashWithdrawal[];
+  cashCloses: CashClose[];
 }

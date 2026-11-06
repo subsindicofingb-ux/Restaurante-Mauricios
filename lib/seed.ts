@@ -28,13 +28,25 @@ export function seedState(): AppState {
     ],
     orders: [],
     customers: [],
+    expenses: [],
+    withdrawals: [],
+    cashCloses: [],
+  };
+}
+
+function withBooks(state: AppState): AppState {
+  return {
+    ...state,
+    customers: Array.isArray(state.customers) ? state.customers : [],
+    expenses: Array.isArray(state.expenses) ? state.expenses : [],
+    withdrawals: Array.isArray(state.withdrawals) ? state.withdrawals : [],
+    cashCloses: Array.isArray(state.cashCloses) ? state.cashCloses : [],
   };
 }
 
 export function adoptHouse(state: AppState): AppState {
-  const customers = Array.isArray(state.customers) ? state.customers : [];
   const demo = state.dishes.some((dish) => dish.id === "dish_picanha" || dish.name === "Picanha na brasa");
-  const base = demo ? seedState() : { ...state, customers };
+  const base = withBooks(demo ? seedState() : state);
   if (base.ingredients.length > 0) return base;
   const pantry = copyPantry();
   return {

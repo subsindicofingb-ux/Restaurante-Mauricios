@@ -4,41 +4,57 @@ import { createContext, createElement, useContext, useEffect, useState, type Rea
 
 const KEY = "mauricios-equipe";
 
-function storedName() {
-  if (typeof window === "undefined") return null;
-  const stored = window.localStorage.getItem(KEY)?.trim();
-  return stored || null;
-}
+export type StaffRole = "admin" | "equipe" | "delivery";
 
 interface StaffSession {
   ready: boolean;
   name: string | null;
-  enter: (next: string) => void;
+  role: StaffRole | null;
+  enter: (name: string, role: StaffRole) => void;
   leave: () => void;
+}
+
+interface StoredStaff {
+  name: string;
+  role: StaffRole;
+}
+
+function readStaff(): StoredStaff | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as StoredStaff;
+    if (parsed?.name && (parsed.role === "admin" || parsed.role === "equipe" || parsed.role === "delivery")) return parsed;
+  } catch {
+    /* sessão antiga, só com o nome */
+  }
+  return { name: raw.trim(), role: "equipe" };
 }
 
 const Ctx = createContext<StaffSession | null>(null);
 
 export function StaffProvider({ children }: { children: ReactNode }) {
-  const [name, setName] = useState<string | null>(null);
+  const [stored, setStored] = useState<StoredStaff | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setName(storedName());
+    setStored(readStaff());
     setReady(true);
   }, []);
 
   const session: StaffSession = {
     ready,
-    name,
-    enter(next: string) {
-      const clean = next.trim();
-      window.localStorage.setItem(KEY, clean);
-      setName(clean);
+    name: stored?.name ?? null,
+    role: stored?.role ?? null,
+    enter(name: string, role: StaffRole) {
+      const next = { name: name.trim(), role };
+      window.localStorage.setItem(KEY, JSON.stringify(next));
+      setStored(next);
     },
     leave() {
       window.localStorage.removeItem(KEY);
-      setName(null);
+      setStored(null);
     },
   };
 
@@ -52,5 +68,5 @@ export function useStaffSession() {
 }
 
 export function staffSignedIn() {
-  return Boolean(storedName());
+  return Boolean(readStaff());
 }
