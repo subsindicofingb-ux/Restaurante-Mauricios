@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { restaurant } from "@/lib/config";
 import { useStaffSession, type StaffRole } from "@/lib/staff";
+import { useStore } from "@/lib/store";
 
 const home: Record<StaffRole, string> = {
   admin: "/painel",
@@ -13,6 +14,7 @@ const home: Record<StaffRole, string> = {
 
 export default function AcessoPage() {
   const staff = useStaffSession();
+  const store = useStore();
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
@@ -29,6 +31,7 @@ export default function AcessoPage() {
       return;
     }
     staff.enter(name, role);
+    store.registerPerson({ name, role: role === "admin" ? "administrador" : "funcionario" });
     window.location.assign(home[role]);
   }
 

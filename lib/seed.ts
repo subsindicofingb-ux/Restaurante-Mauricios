@@ -1,6 +1,6 @@
 import { houseMenu } from "./menu";
 import { houseIngredients, houseSuppliers } from "./pantry";
-import type { AppState } from "./types";
+import type { AppState, Customer, HousePerson } from "./types";
 
 function copyPantry() {
   return {
@@ -28,16 +28,35 @@ export function seedState(): AppState {
     ],
     orders: [],
     customers: [],
+    people: [],
     expenses: [],
     withdrawals: [],
     cashCloses: [],
   };
 }
 
+function customerOf(item: Customer): Customer {
+  return {
+    ...item,
+    cep: item.cep ?? "",
+    street: item.street ?? "",
+    number: item.number ?? "",
+    complement: item.complement ?? "",
+    neighborhood: item.neighborhood ?? "",
+    city: item.city ?? "",
+    address: item.address ?? "",
+  };
+}
+
+function personOf(item: HousePerson): HousePerson {
+  return { ...item, phone: item.phone ?? "", role: item.role === "administrador" ? "administrador" : "funcionario" };
+}
+
 function withBooks(state: AppState): AppState {
   return {
     ...state,
-    customers: Array.isArray(state.customers) ? state.customers : [],
+    customers: (Array.isArray(state.customers) ? state.customers : []).map(customerOf),
+    people: (Array.isArray(state.people) ? state.people : []).map(personOf),
     expenses: Array.isArray(state.expenses) ? state.expenses : [],
     withdrawals: Array.isArray(state.withdrawals) ? state.withdrawals : [],
     cashCloses: Array.isArray(state.cashCloses) ? state.cashCloses : [],

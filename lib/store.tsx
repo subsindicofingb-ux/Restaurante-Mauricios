@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { formatAddress, type DeliveryAddress } from "./address";
 import { cashDay, deliveryFeeFor, stockNeed } from "./calc";
 import { fetchHouse, houseOnline, saveHouse, supabase } from "./remote";
 import { adoptHouse, seedState } from "./seed";
@@ -8,6 +9,7 @@ import type {
   AppState,
   Customer,
   Dish,
+  HousePerson,
   Fulfillment,
   Ingredient,
   ItemStatus,
@@ -29,6 +31,7 @@ const blankState: AppState = {
   tables: [],
   orders: [],
   customers: [],
+  people: [],
   expenses: [],
   withdrawals: [],
   cashCloses: [],
@@ -122,7 +125,8 @@ interface Store extends AppState {
     lines: { dishId: string; qty: number; notes: string }[];
     fire: boolean;
   }) => Order;
-  registerCustomer: (input: { name: string; phone: string; address: string }) => Customer;
+  registerCustomer: (input: { name: string; phone: string; address?: string } & Partial<DeliveryAddress>) => Customer;
+  registerPerson: (input: { name: string; phone?: string; role: HousePerson["role"] }) => HousePerson;
   addExpense: (input: { description: string; category: string; amount: number }) => void;
   addWithdrawal: (input: { by: string; reason: string; amount: number }) => void;
   closeCash: (input: { by: string; countedCash: number; note: string }) => void;
@@ -271,6 +275,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return {
       ...state,
       customers: state.customers ?? [],
+      people: state.people ?? [],
       expenses: state.expenses ?? [],
       withdrawals: state.withdrawals ?? [],
       cashCloses: state.cashCloses ?? [],
@@ -474,22 +479,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       registerCustomer: (input) => {
         const phone = input.phone.replace(/\D/g, "");
         const found = state.customers.find((item) => item.phone === phone);
-        const customer: Customer = found
-          ? { ...found, name: input.name.trim(), address: input.address.trim() }
-          : {
-              id: uid("cli"),
-              name: input.name.trim(),
-              phone,
-              address: input.address.trim(),
-              createdAt: new Date().toISOString(),
-            };
+        const parts: DeliveryAddress = {
+          cep: input.cep ?? found?.cep ?? "",
+          street: input.street ?? found?.street ?? "",
+          number: input.number ?? found?.number ?? "",
+          complement: input.complement ?? found?.complement ?? "",
+          neighborhood: input.neighborhood ?? found?.neighborhood ?? "",
+          city: input.city ?? found?.city ?? "",
+        };
+        const address = parts.street ? formatAddress(parts) : (input.address ?? found?.address ?? "").trim();
+        const customer: Customer = {
+          id: found?.id ?? uid("cli"),
+          name: input.name.trim(),
+          phone,
+          ...parts,
+          address,
+          createdAt: found?.createdAt ?? new Date().toISOString(),
+        };
         setState((current) => ({
           ...current,
           customers: current.customers.some((item) => item.phone === phone)
-            ? current.customers.map((item) => (item.phone === phone ? { ...item, name: customer.name, address: customer.address } : item))
+            ? current.customers.map((item) => (item.phone === phone ? customer : item))
             : [customer, ...current.customers],
         }));
         return customer;
+      },
+      registerPerson: (input) => {
+        const name = input.name.trim();
+        const key = name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-");
+        const id = `${input.role}_${key || "pessoa"}`;
+        const found = (state.people ?? []).find((item) => item.id === id);
+        const person: HousePerson = {
+          id,
+          name,
+          phone: (input.phone ?? found?.phone ?? "").replace(/\D/g, ""),
+          role: input.role,
+          createdAt: found?.createdAt ?? new Date().toISOString(),
+        };
+        setState((current) => ({
+          ...current,
+          people: (current.people ?? []).some((item) => item.id === id)
+            ? (current.people ?? []).map((item) => (item.id === id ? person : item))
+            : [person, ...(current.people ?? [])],
+        }));
+        return person;
       },
       addExpense: (input) =>
         setState((current) => ({

@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ShoppingBasket,
   Store,
+  Users,
   UtensilsCrossed,
   Wallet,
   Warehouse,
@@ -24,6 +25,7 @@ const adminGroup = {
   items: [
     { href: "/painel", label: "Painel", icon: LayoutDashboard },
     { href: "/financeiro", label: "Financeiro", icon: Wallet },
+    { href: "/pessoas", label: "Pessoas", icon: Users },
     { href: "/fichas", label: "Fichas técnicas", icon: ClipboardList },
     { href: "/estoque", label: "Estoque", icon: Warehouse },
     { href: "/compras", label: "Compras", icon: ShoppingBasket },

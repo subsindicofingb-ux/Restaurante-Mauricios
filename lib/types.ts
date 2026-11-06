@@ -121,6 +121,20 @@ export interface Customer {
   name: string;
   phone: string;
   address: string;
+  cep: string;
+  street: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  createdAt: string;
+}
+
+export interface HousePerson {
+  id: string;
+  name: string;
+  phone: string;
+  role: "funcionario" | "administrador";
   createdAt: string;
 }
 
@@ -161,6 +175,7 @@ export interface AppState {
   tables: DiningTable[];
   orders: Order[];
   customers: Customer[];
+  people: HousePerson[];
   expenses: CashExpense[];
   withdrawals: CashWithdrawal[];
   cashCloses: CashClose[];

@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { addressReady, emptyAddress, formatAddress, type DeliveryAddress } from "@/lib/address";
 import { deliveryFeeFor } from "@/lib/calc";
 import { payLabel, restaurant } from "@/lib/config";
+import { AddressFields } from "@/components/address-fields";
 import { digits, money, phoneLabel } from "@/lib/format";
 import { menuCategories } from "@/lib/menu";
 import { useClientSession } from "@/lib/session";
@@ -34,7 +36,7 @@ export default function PedirPage() {
   const [mode, setMode] = useState<"cadastrar" | "entrar">("cadastrar");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
+  const [destination, setDestination] = useState<DeliveryAddress>(emptyAddress());
   const [accountError, setAccountError] = useState("");
   const [category, setCategory] = useState("Todos");
   const [query, setQuery] = useState("");
@@ -52,7 +54,14 @@ export default function PedirPage() {
     }
     setName(customer.name);
     setPhone(phoneLabel(customer.phone));
-    setAddress(customer.address);
+    setDestination({
+      cep: customer.cep ?? "",
+      street: customer.street ?? "",
+      number: customer.number ?? "",
+      complement: customer.complement ?? "",
+      neighborhood: customer.neighborhood ?? "",
+      city: customer.city ?? "",
+    });
     setStep((current) => (current === "conta" ? "cardapio" : current));
     // Hidrata o formulário só quando a pessoa entra ou sai.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,7 +98,7 @@ export default function PedirPage() {
       setAccountError("Informe nome e um celular com DDD.");
       return;
     }
-    const saved = store.registerCustomer({ name, phone: cleanPhone, address });
+    const saved = store.registerCustomer({ name, phone: cleanPhone, ...destination });
     session.enter(saved.id);
     setAccountError("");
     setStep("cardapio");
@@ -106,14 +115,14 @@ export default function PedirPage() {
       fulfillment,
       customerName: customer.name,
       phone: customer.phone,
-      address: fulfillment === "entrega" ? address.trim() : "Retirada na casa",
+      address: fulfillment === "entrega" ? formatAddress(destination) : "Retirada na casa",
       notes: note,
       payMethod: pay,
       fire: false,
       lines: lines.map(([dishId, count]) => ({ dishId, qty: count, notes: "" })),
     });
-    if (address.trim() !== customer.address) {
-      store.registerCustomer({ name: customer.name, phone: customer.phone, address });
+    if (formatAddress(destination) !== customer.address) {
+      store.registerCustomer({ name: customer.name, phone: customer.phone, ...destination });
     }
     router.push(`/pedido?code=${order.code}`);
   }
@@ -157,9 +166,7 @@ export default function PedirPage() {
           <div className="mt-4 space-y-2">
             {mode === "cadastrar" && <input className="field" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />}
             <input className="field" placeholder="Celular com DDD" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-            {mode === "cadastrar" && (
-              <textarea className="field" rows={3} placeholder="Endereço de entrega, se já quiser deixar salvo" value={address} onChange={(e) => setAddress(e.target.value)} />
-            )}
+            {mode === "cadastrar" && <AddressFields value={destination} onChange={setDestination} />}
             {accountError && <p className="text-sm text-terra">{accountError}</p>}
             <button className="btn btn-primary w-full" onClick={saveAccount}>
               {mode === "cadastrar" ? "Criar cadastro e ver o cardápio" : "Entrar"}
@@ -232,7 +239,10 @@ export default function PedirPage() {
               ))}
             </div>
             {fulfillment === "entrega" && (
-              <textarea className="field mt-3" rows={3} placeholder="Endereço, complemento e referência" value={address} onChange={(e) => setAddress(e.target.value)} />
+              <div className="mt-3">
+                {!destination.street && customer.address && <p className="mb-2 text-sm text-muted">Endereço já salvo: {customer.address}</p>}
+                <AddressFields value={destination} onChange={setDestination} />
+              </div>
             )}
             <input className="field mt-3" placeholder="Observação para a cozinha" value={notes} onChange={(e) => setNotes(e.target.value)} />
             <div className="mt-4 grid gap-2">
@@ -275,7 +285,7 @@ export default function PedirPage() {
             </div>
             <button
               className="btn mt-4 w-full bg-terra text-white hover:bg-[#a33e1b]"
-              disabled={!lines.length || (fulfillment === "entrega" && address.trim().length < 6)}
+              disabled={!lines.length || (fulfillment === "entrega" && !addressReady(destination))}
               onClick={place}
             >
               Confirmar pedido
