@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { etaLabel, orderTotal } from "@/lib/calc";
-import { restaurant } from "@/lib/config";
+import { payLabel, restaurant } from "@/lib/config";
 import { money } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { useNow } from "@/lib/use-now";
@@ -94,7 +94,7 @@ function PedidoPage() {
           <span className="font-serif text-3xl">{money(orderTotal(order))}</span>
         </div>
         <p className="mt-3 text-xs text-muted">
-          Pagamento no {order.payMethod}. O status vem da cozinha, neste celular ou em qualquer outro.
+          Pagamento: {order.payMethod ? payLabel[order.payMethod] : "a combinar"}. O status vem da cozinha.
         </p>
       </section>
       <Link href="/pedir" className="mt-6 inline-block text-sm underline-offset-4 hover:underline">

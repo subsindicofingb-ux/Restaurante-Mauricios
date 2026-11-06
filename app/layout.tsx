@@ -9,8 +9,9 @@ const sans = Outfit({ subsets: ["latin"], variable: "--font-sans" });
 const serif = Fraunces({ subsets: ["latin"], variable: "--font-serif" });
 
 export const metadata: Metadata = {
-  title: "Mauricio's · gestão da casa",
-  description: "Ficha técnica, CMV, estoque, salão, cozinha e delivery da casa.",
+  title: "Mauricio's · Petiscaria e Restaurante",
+  description: "Cardápio, pedido, cozinha e gestão da casa.",
+  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -7,7 +7,6 @@ import {
   Bike,
   ChefHat,
   ClipboardList,
-  CookingPot,
   Flame,
   LayoutDashboard,
   ShoppingBasket,
@@ -16,6 +15,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import { restaurant } from "@/lib/config";
+import { useClientSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 
 const groups = [
@@ -42,28 +42,30 @@ const groups = [
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const store = useStore();
-  const customer = pathname.startsWith("/pedir") || pathname.startsWith("/pedido");
+  const session = useClientSession();
+  const guest = pathname.startsWith("/pedir") || pathname.startsWith("/pedido");
+  const account = store.customers.find((item) => item.id === session.id);
   const waiting = store.orders.filter((order) => order.status === "recebido").length;
   const kds = pathname === "/cozinha";
 
-  if (customer) {
+  if (guest) {
     return (
       <div className="min-h-screen">
-        <header className="flex items-center justify-between px-5 py-4 md:px-10">
+        <header className="flex items-center justify-between gap-4 px-5 py-4 md:px-10">
           <Link href="/pedir" className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-ink text-paper">
-              <CookingPot size={18} />
-            </span>
+            <img src="/logo.png" alt="" className="h-14 w-14 rounded-full bg-white shadow-card" />
             <span>
               <span className="block font-serif text-xl leading-none">{restaurant.name}</span>
-              <span className="text-xs text-muted">Pedido direto da casa</span>
+              <span className="text-xs text-muted">{restaurant.tagline}</span>
             </span>
           </Link>
-          <Link href="/" className="text-sm text-muted underline-offset-4 hover:underline">
-            Entrar na operação
-          </Link>
+          {account && (
+            <button onClick={session.leave} className="text-sm text-muted underline-offset-4 hover:underline">
+              Sair · {account.name.split(" ")[0]}
+            </button>
+          )}
         </header>
-        <main className="mx-auto max-w-6xl px-5 pb-16 md:px-10">{children}</main>
+        <main className="mx-auto max-w-6xl px-5 pb-28 md:px-10">{children}</main>
       </div>
     );
   }
@@ -71,10 +73,12 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[248px_1fr]">
       <aside className="hidden bg-side text-[#f3ecdf] md:flex md:flex-col">
-        <div className="px-5 pb-4 pt-6">
-          <div className="text-[11px] uppercase tracking-[0.22em] text-[#c8a27a]">Casa</div>
-          <div className="font-serif text-3xl leading-none">{restaurant.name}</div>
-          <div className="mt-1 text-xs text-[#b7ab9c]">Gestão, salão e delivery</div>
+        <div className="flex items-center gap-3 px-5 pb-4 pt-6">
+          <img src="/logo.png" alt="" className="h-12 w-12 rounded-full bg-white" />
+          <div>
+            <div className="font-serif text-2xl leading-none">{restaurant.name}</div>
+            <div className="mt-1 text-xs text-[#b7ab9c]">{restaurant.tagline}</div>
+          </div>
         </div>
         <nav className="flex-1 space-y-6 px-3">
           {groups.map((group) => (

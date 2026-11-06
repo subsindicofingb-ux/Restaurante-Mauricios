@@ -8,6 +8,9 @@ create table if not exists public.house_state (
 
 alter table public.house_state enable row level security;
 
+revoke all on public.house_state from anon, authenticated;
+grant select, insert, update on public.house_state to anon, authenticated;
+
 drop policy if exists "public read house" on public.house_state;
 create policy "public read house"
   on public.house_state

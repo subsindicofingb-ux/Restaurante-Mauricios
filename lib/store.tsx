@@ -3,9 +3,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { deliveryFeeFor, stockNeed } from "./calc";
 import { fetchHouse, houseOnline, saveHouse, supabase } from "./remote";
-import { seedState } from "./seed";
+import { adoptHouse, seedState } from "./seed";
 import type {
   AppState,
+  Customer,
   Dish,
   Fulfillment,
   Ingredient,
@@ -27,6 +28,7 @@ const blankState: AppState = {
   purchases: [],
   tables: [],
   orders: [],
+  customers: [],
 };
 
 function load(): AppState {
@@ -36,7 +38,7 @@ function load(): AppState {
     if (!raw) return seedState();
     const parsed = JSON.parse(raw) as AppState;
     if (!parsed.dishes || !parsed.orders || !parsed.ingredients) return seedState();
-    return parsed;
+    return adoptHouse(parsed);
   } catch {
     return seedState();
   }
@@ -117,6 +119,7 @@ interface Store extends AppState {
     lines: { dishId: string; qty: number; notes: string }[];
     fire: boolean;
   }) => Order;
+  registerCustomer: (input: { name: string; phone: string; address: string }) => Customer;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -133,8 +136,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const remote = await fetchHouse();
         if (cancel) return;
         if (remote) {
+          const next = adoptHouse(remote);
           lastSent.current = JSON.stringify(remote);
-          setState(remote);
+          setState(next);
         } else {
           const seed = seedState();
           lastSent.current = JSON.stringify(seed);
@@ -186,6 +190,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const apply = (next: AppState | null) => {
       if (!next) return;
+      next = adoptHouse(next);
       const body = JSON.stringify(next);
       if (body === lastSent.current) return;
       lastSent.current = body;
@@ -268,6 +273,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return {
       ...state,
+      customers: state.customers ?? [],
       ready,
       reset: () => setState(seedState()),
       saveIngredient: (ingredient) =>
@@ -450,6 +456,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ),
           };
         }),
+      registerCustomer: (input) => {
+        const phone = input.phone.replace(/\D/g, "");
+        const found = state.customers.find((item) => item.phone === phone);
+        const customer: Customer = found
+          ? { ...found, name: input.name.trim(), address: input.address.trim() }
+          : {
+              id: uid("cli"),
+              name: input.name.trim(),
+              phone,
+              address: input.address.trim(),
+              createdAt: new Date().toISOString(),
+            };
+        setState((current) => ({
+          ...current,
+          customers: current.customers.some((item) => item.phone === phone)
+            ? current.customers.map((item) => (item.phone === phone ? { ...item, name: customer.name, address: customer.address } : item))
+            : [customer, ...current.customers],
+        }));
+        return customer;
+      },
       createOrder,
     };
   }, [state, ready]);

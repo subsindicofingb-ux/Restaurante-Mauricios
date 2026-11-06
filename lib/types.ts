@@ -116,6 +116,14 @@ export interface Order {
   updatedAt: string;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  createdAt: string;
+}
+
 export interface AppState {
   ingredients: Ingredient[];
   suppliers: Supplier[];
@@ -123,4 +131,5 @@ export interface AppState {
   purchases: Purchase[];
   tables: DiningTable[];
   orders: Order[];
+  customers: Customer[];
 }

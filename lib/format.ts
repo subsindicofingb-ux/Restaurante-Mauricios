@@ -1,3 +1,14 @@
+export function digits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+export function phoneLabel(value: string) {
+  const d = digits(value);
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return value;
+}
+
 export function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }

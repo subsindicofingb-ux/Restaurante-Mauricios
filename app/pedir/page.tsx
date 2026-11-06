@@ -1,152 +1,291 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { deliveryFeeFor } from "@/lib/calc";
-import { restaurant } from "@/lib/config";
-import { money } from "@/lib/format";
+import { payLabel, restaurant } from "@/lib/config";
+import { digits, money, phoneLabel } from "@/lib/format";
+import { menuCategories } from "@/lib/menu";
+import { useClientSession } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import type { PayMethod } from "@/lib/types";
 
+const steps = [
+  { id: "conta", label: "Cadastro" },
+  { id: "cardapio", label: "Pedido" },
+  { id: "pagamento", label: "Pagamento" },
+] as const;
+
+type Step = (typeof steps)[number]["id"];
+
+const payCopy: Record<PayMethod, string> = {
+  pix: "Pix na entrega ou na retirada.",
+  cartao: "Máquina na entrega ou no balcão.",
+  dinheiro: "Em espécie. Se precisar de troco, diga para quanto.",
+};
+
 export default function PedirPage() {
   const store = useStore();
+  const session = useClientSession();
   const router = useRouter();
+  const customer = store.customers.find((item) => item.id === session.id) ?? null;
   const menu = store.dishes.filter((dish) => dish.active && dish.channels.includes("delivery"));
-  const categories = [...new Set(menu.map((dish) => dish.category))];
-  const [qty, setQty] = useState<Record<string, number>>({});
+  const [step, setStep] = useState<Step>("conta");
+  const [mode, setMode] = useState<"cadastrar" | "entrar">("cadastrar");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
-  const [notes, setNotes] = useState("");
+  const [accountError, setAccountError] = useState("");
+  const [category, setCategory] = useState("Todos");
+  const [query, setQuery] = useState("");
+  const [qty, setQty] = useState<Record<string, number>>({});
   const [fulfillment, setFulfillment] = useState<"entrega" | "retirada">("entrega");
+  const [notes, setNotes] = useState("");
   const [pay, setPay] = useState<PayMethod>("pix");
-  const [placed, setPlaced] = useState<string | null>(null);
+  const [changeFor, setChangeFor] = useState("");
 
   useEffect(() => {
-    if (placed) router.push(`/pedido?code=${placed}`);
-  }, [placed, router]);
+    if (!session.ready) return;
+    if (!customer) {
+      setStep("conta");
+      return;
+    }
+    setName(customer.name);
+    setPhone(phoneLabel(customer.phone));
+    setAddress(customer.address);
+    setStep((current) => (current === "conta" ? "cardapio" : current));
+    // Hidrata o formulário só quando a pessoa entra ou sai.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.ready, customer?.id]);
 
   const lines = Object.entries(qty).filter(([, count]) => count > 0);
   const subtotal = lines.reduce((sum, [id, count]) => sum + (store.dishes.find((dish) => dish.id === id)?.price ?? 0) * count, 0);
   const fee = deliveryFeeFor(subtotal, fulfillment);
-  const prep = Math.max(8, ...lines.map(([id]) => store.dishes.find((dish) => dish.id === id)?.prepMinutes ?? 10));
-  const marketplace = subtotal * restaurant.marketplaceRate;
+  const visible = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    return menu.filter((dish) => {
+      const inCategory = category === "Todos" || dish.category === category;
+      const matches = !text || dish.name.toLowerCase().includes(text);
+      return inCategory && matches;
+    });
+  }, [menu, category, query]);
+  const grouped = menuCategories.filter((item) => visible.some((dish) => dish.category === item));
+
+  function saveAccount() {
+    const cleanPhone = digits(phone);
+    if (mode === "entrar" && !customer) {
+      const found = store.customers.find((item) => item.phone === cleanPhone);
+      if (!found) {
+        setAccountError("Não achamos esse celular. Faça o cadastro para pedir.");
+        setMode("cadastrar");
+        return;
+      }
+      session.enter(found.id);
+      setAccountError("");
+      setStep("cardapio");
+      return;
+    }
+    if (name.trim().length < 2 || cleanPhone.length < 10) {
+      setAccountError("Informe nome e um celular com DDD.");
+      return;
+    }
+    const saved = store.registerCustomer({ name, phone: cleanPhone, address });
+    session.enter(saved.id);
+    setAccountError("");
+    setStep("cardapio");
+  }
+
+  function place() {
+    if (!customer) {
+      setStep("conta");
+      return;
+    }
+    const note = [notes.trim(), pay === "dinheiro" && changeFor.trim() ? `Troco para ${changeFor.trim()}` : ""].filter(Boolean).join(". ");
+    const order = store.createOrder({
+      channel: "delivery",
+      fulfillment,
+      customerName: customer.name,
+      phone: customer.phone,
+      address: fulfillment === "entrega" ? address.trim() : "Retirada na casa",
+      notes: note,
+      payMethod: pay,
+      fire: false,
+      lines: lines.map(([dishId, count]) => ({ dishId, qty: count, notes: "" })),
+    });
+    if (address.trim() !== customer.address) {
+      store.registerCustomer({ name: customer.name, phone: customer.phone, address });
+    }
+    router.push(`/pedido?code=${order.code}`);
+  }
+
+  if (!session.ready) return <p className="text-muted">Abrindo o cardápio…</p>;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
-      <div>
-        <p className="kicker">Cardápio direto</p>
-        <h1 className="mt-1 max-w-xl font-serif text-5xl tracking-tight">Peça na casa. A cozinha vê na hora.</h1>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-muted">
-          Sem fila de aplicativo, sem anúncio no meio do prato. Você acompanha o pedido com o código, do aceite até a porta.
-          {fulfillment === "entrega" ? ` Entrega grátis a partir de ${money(restaurant.freeDeliveryFrom)}.` : " Retirada sem taxa."}
-        </p>
-        <div className="mt-6 space-y-8">
-          {categories.map((category) => (
-            <section key={category}>
-              <h2 className="mb-3 font-serif text-2xl">{category}</h2>
-              <div className="space-y-2">
-                {menu
-                  .filter((dish) => dish.category === category)
-                  .map((dish) => (
-                    <article key={dish.id} className="flex items-center justify-between gap-4 rounded-3xl bg-card px-4 py-4 shadow-card">
-                      <div>
-                        <h3 className="font-medium">{dish.name}</h3>
-                        <p className="text-sm text-muted">{dish.description}</p>
-                        <p className="mt-1 font-serif text-xl">{money(dish.price)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button className="h-9 w-9 rounded-full border border-line" onClick={() => setQty({ ...qty, [dish.id]: Math.max(0, (qty[dish.id] ?? 0) - 1) })}>
-                          –
-                        </button>
-                        <span className="w-5 text-center">{qty[dish.id] ?? 0}</span>
-                        <button className="h-9 w-9 rounded-full bg-ink text-paper" onClick={() => setQty({ ...qty, [dish.id]: (qty[dish.id] ?? 0) + 1 })}>
-                          +
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      </div>
-      <aside className="h-fit rounded-[28px] bg-ink p-5 text-paper lg:sticky lg:top-6">
-        <div className="text-xs uppercase tracking-[0.16em] text-[#e0b497]">Seu pedido</div>
-        <div className="mt-3 flex rounded-full bg-white/10 p-1 text-sm">
-          {(["entrega", "retirada"] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setFulfillment(mode)}
-              className={`flex-1 rounded-full py-2 ${fulfillment === mode ? "bg-paper text-ink" : ""}`}
-            >
-              {mode === "entrega" ? "Entrega" : "Retirada"}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 space-y-2 text-sm">
-          {lines.length === 0 && <p className="text-[#c8b8a4]">Escolha os pratos ao lado.</p>}
-          {lines.map(([id, count]) => {
-            const dish = store.dishes.find((item) => item.id === id);
-            return (
-              <div key={id} className="flex justify-between">
-                <span>
-                  {count}× {dish?.name}
-                </span>
-                <span>{money((dish?.price ?? 0) * count)}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">
-          <div className="flex justify-between text-[#c8b8a4]">
-            <span>Entrega</span>
-            <span>{fee === 0 ? "Grátis" : money(fee)}</span>
-          </div>
-          <div className="flex justify-between font-serif text-3xl">
-            <span>Total</span>
-            <span>{money(subtotal + fee)}</span>
-          </div>
-          <p className="text-xs leading-5 text-[#e0b497]">
-            {lines.length ? `Preparo de cerca de ${prep} min, e o status anda de verdade até a porta.` : "O status anda de verdade, da cozinha até a porta."} Neste pedido a casa deixa de pagar cerca de {money(marketplace)} de comissão de aplicativo.
+    <div>
+      <ol className="mb-6 flex gap-2">
+        {steps.map((item, index) => {
+          const locked = item.id !== "conta" && !customer;
+          const current = step === item.id;
+          return (
+            <li key={item.id} className="flex-1">
+              <button
+                disabled={locked}
+                onClick={() => setStep(item.id)}
+                className={`w-full rounded-full px-3 py-2 text-sm ${current ? "bg-ink text-paper" : "bg-white text-muted"} disabled:opacity-40`}
+              >
+                {index + 1}. {item.label}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+
+      {step === "conta" && (
+        <section className="mx-auto max-w-lg">
+          <img src="/logo.png" alt="Mauricio's" className="mx-auto h-28 w-28 rounded-full bg-white shadow-card" />
+          <h1 className="mt-4 text-center font-serif text-4xl tracking-tight">Seu acesso</h1>
+          <p className="mt-2 text-center text-sm leading-6 text-muted">
+            O cadastro fica na casa. Com ele você pede, escolhe como pagar e acompanha o prato saindo da cozinha.
           </p>
-        </div>
-        <div className="mt-4 space-y-2">
-          <input className="field text-ink" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="field text-ink" placeholder="Celular" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          {fulfillment === "entrega" && (
-            <textarea className="field text-ink" rows={3} placeholder="Endereço, complemento e referência" value={address} onChange={(e) => setAddress(e.target.value)} />
-          )}
-          <input className="field text-ink" placeholder="Observação para a cozinha" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          <div className="grid grid-cols-3 gap-2">
-            {(["pix", "cartao", "dinheiro"] as PayMethod[]).map((method) => (
-              <button key={method} onClick={() => setPay(method)} className={`rounded-full py-2 text-xs uppercase ${pay === method ? "bg-paper text-ink" : "bg-white/10"}`}>
-                {method}
+          <div className="mt-6 flex rounded-full bg-white p-1 text-sm shadow-card">
+            {(["cadastrar", "entrar"] as const).map((item) => (
+              <button key={item} onClick={() => { setMode(item); setAccountError(""); }} className={`flex-1 rounded-full py-2 ${mode === item ? "bg-ink text-paper" : ""}`}>
+                {item === "cadastrar" ? "Cadastrar" : "Já tenho cadastro"}
               </button>
             ))}
           </div>
-          <button
-            className="btn w-full bg-terra text-white hover:bg-[#a33e1b]"
-            disabled={!lines.length || name.trim().length < 2 || (fulfillment === "entrega" && address.trim().length < 6)}
-            onClick={() => {
-              const order = store.createOrder({
-                channel: "delivery",
-                fulfillment,
-                customerName: name.trim(),
-                phone: phone.trim(),
-                address: fulfillment === "entrega" ? address.trim() : "Retirada na casa",
-                notes: notes.trim(),
-                payMethod: pay,
-                fire: false,
-                lines: lines.map(([dishId, count]) => ({ dishId, qty: count, notes: "" })),
-              });
-              setPlaced(order.code);
-            }}
-          >
-            Fazer pedido
-          </button>
+          <div className="mt-4 space-y-2">
+            {mode === "cadastrar" && <input className="field" placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />}
+            <input className="field" placeholder="Celular com DDD" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            {mode === "cadastrar" && (
+              <textarea className="field" rows={3} placeholder="Endereço de entrega, se já quiser deixar salvo" value={address} onChange={(e) => setAddress(e.target.value)} />
+            )}
+            {accountError && <p className="text-sm text-terra">{accountError}</p>}
+            <button className="btn btn-primary w-full" onClick={saveAccount}>
+              {mode === "cadastrar" ? "Criar cadastro e ver o cardápio" : "Entrar"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {step === "cardapio" && customer && (
+        <div>
+          <p className="kicker">{restaurant.tagline}</p>
+          <h1 className="mt-1 font-serif text-5xl tracking-tight">Olá, {customer.name.split(" ")[0]}.</h1>
+          <p className="mt-2 max-w-xl text-sm text-muted">Escolha os pratos. O pagamento fica no passo seguinte.</p>
+          <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+            {["Todos", ...menuCategories].map((item) => (
+              <button key={item} onClick={() => setCategory(item)} className={`shrink-0 rounded-full px-3 py-1.5 text-sm ${category === item ? "bg-ink text-paper" : "bg-white"}`}>
+                {item}
+              </button>
+            ))}
+          </div>
+          <input className="field mt-3" placeholder="Buscar no cardápio" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <div className="mt-6 space-y-8">
+            {grouped.map((group) => (
+              <section key={group}>
+                <h2 className="mb-3 font-serif text-2xl">{group}</h2>
+                <div className="space-y-2">
+                  {visible
+                    .filter((dish) => dish.category === group)
+                    .map((dish) => (
+                      <article key={dish.id} className="flex items-center justify-between gap-4 rounded-3xl bg-card px-4 py-4 shadow-card">
+                        <div>
+                          <h3 className="font-medium">{dish.name}</h3>
+                          {dish.description && <p className="text-sm text-muted">{dish.description}</p>}
+                          <p className="mt-1 font-serif text-xl">{money(dish.price)}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button className="h-9 w-9 rounded-full border border-line" onClick={() => setQty({ ...qty, [dish.id]: Math.max(0, (qty[dish.id] ?? 0) - 1) })}>
+                            –
+                          </button>
+                          <span className="w-5 text-center">{qty[dish.id] ?? 0}</span>
+                          <button className="h-9 w-9 rounded-full bg-ink text-paper" onClick={() => setQty({ ...qty, [dish.id]: (qty[dish.id] ?? 0) + 1 })}>
+                            +
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                </div>
+              </section>
+            ))}
+            {grouped.length === 0 && <p className="text-muted">Nada com esse nome no cardápio.</p>}
+          </div>
+          <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-paper/95 px-5 py-3 backdrop-blur md:static md:mt-8 md:border-0 md:bg-transparent md:px-0 md:py-0">
+            <button className="btn btn-primary w-full" disabled={!lines.length} onClick={() => setStep("pagamento")}>
+              Ir para o pagamento · {lines.length ? money(subtotal) : "escolha um prato"}
+            </button>
+          </div>
         </div>
-      </aside>
+      )}
+
+      {step === "pagamento" && customer && (
+        <section className="mx-auto grid max-w-3xl gap-6 lg:grid-cols-[1fr_280px]">
+          <div>
+            <p className="kicker">Como vai pagar</p>
+            <h1 className="mt-1 font-serif text-4xl tracking-tight">Fechar o pedido</h1>
+            <div className="mt-5 flex rounded-full bg-white p-1 text-sm shadow-card">
+              {(["entrega", "retirada"] as const).map((modeName) => (
+                <button key={modeName} onClick={() => setFulfillment(modeName)} className={`flex-1 rounded-full py-2 ${fulfillment === modeName ? "bg-ink text-paper" : ""}`}>
+                  {modeName === "entrega" ? "Entrega" : "Retirada"}
+                </button>
+              ))}
+            </div>
+            {fulfillment === "entrega" && (
+              <textarea className="field mt-3" rows={3} placeholder="Endereço, complemento e referência" value={address} onChange={(e) => setAddress(e.target.value)} />
+            )}
+            <input className="field mt-3" placeholder="Observação para a cozinha" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <div className="mt-4 grid gap-2">
+              {(["pix", "cartao", "dinheiro"] as PayMethod[]).map((method) => (
+                <button key={method} onClick={() => setPay(method)} className={`rounded-3xl px-4 py-4 text-left ${pay === method ? "bg-ink text-paper" : "bg-card shadow-card"}`}>
+                  <span className="block font-medium">{payLabel[method]}</span>
+                  <span className={`mt-1 block text-sm ${pay === method ? "text-[#e7dfd2]" : "text-muted"}`}>{payCopy[method]}</span>
+                </button>
+              ))}
+            </div>
+            {pay === "dinheiro" && <input className="field mt-3" placeholder="Troco para quanto?" value={changeFor} onChange={(e) => setChangeFor(e.target.value)} />}
+          </div>
+          <aside className="h-fit rounded-[28px] bg-ink p-5 text-paper lg:sticky lg:top-6">
+            <div className="text-xs uppercase tracking-[0.16em] text-[#e0b497]">Resumo</div>
+            <div className="mt-3 space-y-2 text-sm">
+              {lines.map(([id, count]) => {
+                const dish = store.dishes.find((item) => item.id === id);
+                return (
+                  <div key={id} className="flex justify-between gap-3">
+                    <span>
+                      {count}× {dish?.name}
+                    </span>
+                    <span>{money((dish?.price ?? 0) * count)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">
+              <div className="flex justify-between text-[#c8b8a4]">
+                <span>Entrega</span>
+                <span>{fee === 0 ? "Grátis" : money(fee)}</span>
+              </div>
+              <div className="flex justify-between font-serif text-3xl">
+                <span>Total</span>
+                <span>{money(subtotal + fee)}</span>
+              </div>
+              <p className="text-xs leading-5 text-[#e0b497]">
+                {fulfillment === "entrega" ? `Grátis a partir de ${money(restaurant.freeDeliveryFrom)}.` : "Retirada sem taxa."} Pagamento em {payLabel[pay]}.
+              </p>
+            </div>
+            <button
+              className="btn mt-4 w-full bg-terra text-white hover:bg-[#a33e1b]"
+              disabled={!lines.length || (fulfillment === "entrega" && address.trim().length < 6)}
+              onClick={place}
+            >
+              Confirmar pedido
+            </button>
+            <button className="mt-3 w-full text-sm text-[#e7dfd2]" onClick={() => setStep("cardapio")}>
+              Voltar ao cardápio
+            </button>
+          </aside>
+        </section>
+      )}
     </div>
   );
 }

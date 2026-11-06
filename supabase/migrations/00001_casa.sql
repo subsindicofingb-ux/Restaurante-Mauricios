@@ -1,6 +1,6 @@
--- Esquema da casa: ficha, CMV, compras, estoque, salão e delivery.
--- O app de operação ainda grava no navegador. Este banco é o destino quando
--- a autenticação e o tempo real entrarem, para o cliente acompanhar de outro celular.
+-- Esquema normalizado da casa: ficha, CMV, compras, estoque, salão e delivery.
+-- O app de operação grava hoje em house_state. Estas tabelas ficam fechadas
+-- (RLS sem política pública) até a autenticação entrar.
 
 create table suppliers (
   id text primary key,
@@ -95,3 +95,13 @@ create table order_items (
 
 create index orders_code_idx on orders (code);
 create index orders_status_idx on orders (status);
+
+alter table suppliers enable row level security;
+alter table ingredients enable row level security;
+alter table dishes enable row level security;
+alter table recipe_lines enable row level security;
+alter table purchases enable row level security;
+alter table purchase_items enable row level security;
+alter table dining_tables enable row level security;
+alter table orders enable row level security;
+alter table order_items enable row level security;
