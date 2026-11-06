@@ -23,7 +23,7 @@ export default function PedirPage() {
   const [placed, setPlaced] = useState<string | null>(null);
 
   useEffect(() => {
-    if (placed) router.push(`/pedido/${placed}`);
+    if (placed) router.push(`/pedido?code=${placed}`);
   }, [placed, router]);
 
   const lines = Object.entries(qty).filter(([, count]) => count > 0);

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { etaLabel, orderTotal } from "@/lib/calc";
 import { restaurant } from "@/lib/config";
 import { money } from "@/lib/format";
@@ -25,9 +26,9 @@ const steps: Record<Exclude<Fulfillment, "mesa" | "balcao">, { id: OrderStatus; 
   ],
 };
 
-export default function PedidoPage() {
-  const params = useParams<{ code: string }>();
-  const code = String(params.code || "").toUpperCase();
+function PedidoPage() {
+  const params = useSearchParams();
+  const code = String(params.get("code") || "").toUpperCase();
   const store = useStore();
   const now = useNow(5000);
   const order = store.orders.find((item) => item.code.toUpperCase() === code);
@@ -93,12 +94,20 @@ export default function PedidoPage() {
           <span className="font-serif text-3xl">{money(orderTotal(order))}</span>
         </div>
         <p className="mt-3 text-xs text-muted">
-          Pagamento no {order.payMethod}. Esta página atualiza sozinha enquanto a cozinha mexe no pedido — abra a operação em outra aba para ver o status andar.
+          Pagamento no {order.payMethod}. O status vem da cozinha, neste celular ou em qualquer outro.
         </p>
       </section>
       <Link href="/pedir" className="mt-6 inline-block text-sm underline-offset-4 hover:underline">
         Fazer outro pedido
       </Link>
     </div>
+  );
+}
+
+export default function PedidoRoute() {
+  return (
+    <Suspense fallback={<p className="text-muted">Abrindo o pedido…</p>}>
+      <PedidoPage />
+    </Suspense>
   );
 }

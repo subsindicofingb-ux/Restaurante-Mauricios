@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { deliveryFeeFor, stockNeed } from "./calc";
+import { fetchHouse, houseOnline, saveHouse, supabase } from "./remote";
 import { seedState } from "./seed";
 import type {
   AppState,
@@ -123,29 +124,90 @@ const Ctx = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(blankState);
   const [ready, setReady] = useState(false);
+  const lastSent = useRef("");
 
   useEffect(() => {
-    setState(load());
-    setReady(true);
+    let cancel = false;
+    (async () => {
+      if (houseOnline) {
+        const remote = await fetchHouse();
+        if (cancel) return;
+        if (remote) {
+          lastSent.current = JSON.stringify(remote);
+          setState(remote);
+        } else {
+          const seed = seedState();
+          lastSent.current = JSON.stringify(seed);
+          await saveHouse(seed);
+          if (cancel) return;
+          setState(seed);
+        }
+      } else {
+        const local = load();
+        lastSent.current = JSON.stringify(local);
+        setState(local);
+      }
+      if (!cancel) setReady(true);
+    })();
+    return () => {
+      cancel = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    localStorage.setItem(KEY, JSON.stringify(state));
+    const body = JSON.stringify(state);
+    if (body === lastSent.current) return;
+    lastSent.current = body;
+    localStorage.setItem(KEY, body);
+    if (!houseOnline) return;
+    const handle = window.setTimeout(() => {
+      void saveHouse(state);
+    }, 200);
+    return () => window.clearTimeout(handle);
   }, [state, ready]);
 
   useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === KEY && event.newValue) {
-        try {
-          setState(JSON.parse(event.newValue) as AppState);
-        } catch {
-          /* ignore broken snapshots */
+    const client = supabase;
+    if (!houseOnline || !client) {
+      const onStorage = (event: StorageEvent) => {
+        if (event.key === KEY && event.newValue && event.newValue !== lastSent.current) {
+          try {
+            lastSent.current = event.newValue;
+            setState(JSON.parse(event.newValue) as AppState);
+          } catch {
+            /* ignore broken snapshots */
+          }
         }
-      }
+      };
+      window.addEventListener("storage", onStorage);
+      return () => window.removeEventListener("storage", onStorage);
+    }
+
+    const apply = (next: AppState | null) => {
+      if (!next) return;
+      const body = JSON.stringify(next);
+      if (body === lastSent.current) return;
+      lastSent.current = body;
+      setState(next);
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+
+    const channel = client
+      .channel("house-state")
+      .on("postgres_changes", { event: "*", schema: "public", table: "house_state" }, (payload) => {
+        const row = payload.new as { data?: AppState };
+        apply(row?.data ?? null);
+      })
+      .subscribe();
+
+    const poll = window.setInterval(() => {
+      void fetchHouse().then(apply);
+    }, 2000);
+
+    return () => {
+      window.clearInterval(poll);
+      void client.removeChannel(channel);
+    };
   }, []);
 
   const api = useMemo<Store>(() => {

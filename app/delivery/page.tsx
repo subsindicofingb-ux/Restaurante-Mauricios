@@ -91,7 +91,7 @@ export default function DeliveryPage() {
                             </button>
                           )
                         )}
-                        <Link href={`/pedido/${order.code}`} className="text-center text-xs underline-offset-4 hover:underline">
+                        <Link href={`/pedido?code=${order.code}`} className="text-center text-xs underline-offset-4 hover:underline">
                           Ver como o cliente vê
                         </Link>
                         {order.status === "recebido" && (
